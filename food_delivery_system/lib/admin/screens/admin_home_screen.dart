@@ -900,7 +900,7 @@ class _RevenueCard extends StatelessWidget {
               const Icon(Icons.trending_up_rounded,
                   color: Colors.white70, size: 18),
               const Spacer(),
-              Text('\$8,240',
+              Text('PKR 8,240',
                   style: _displayXL.copyWith(
                       color: Colors.white, fontSize: 26)),
               const SizedBox(height: 2),
@@ -1390,7 +1390,7 @@ class _OrderCard extends StatelessWidget {
                       Text(order['time'], style: _body),
                     ],
                   ),
-                  Text('\$${(order['total'] as num).toStringAsFixed(2)}',
+                  Text('Rs. ${(order['total'] as num).toStringAsFixed(2)}',
                       style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
@@ -1587,7 +1587,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         Text('Total Amount',
                             style: _h3.copyWith(color: kPrimary)),
                         Text(
-                            '\$${(widget.order['total'] as num).toStringAsFixed(2)}',
+                            'Rs. ${(widget.order['total'] as num).toStringAsFixed(2)}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 22,
@@ -2221,19 +2221,19 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
                     _FormField(
                         controller: _deliveryFeeController,
                         label: 'Delivery Fee',
-                        hint: 'e.g. \$2.99 or Free',
+                        hint: 'e.g. Rs. 200 or Free',
                         icon: Icons.delivery_dining_rounded,
                         validator: (v) =>
                         v!.isEmpty ? 'Delivery fee is required' : null),
                     _FormField(
                         controller: _priceRangeController,
                         label: 'Price Range',
-                        hint: 'e.g. \$\$ or \$10–\$30',
+                        hint: 'e.g. Rs. or Rs.10–Rs.30',
                         icon: Icons.payments_outlined),
                     _FormField(
                         controller: _freeAboveController,
                         label: 'Free Delivery Above (optional)',
-                        hint: 'e.g. \$20',
+                        hint: 'e.g. Rs. 20',
                         icon: Icons.local_offer_outlined),
                     const SizedBox(height: 8),
                     Container(margin: const EdgeInsets.symmetric(vertical: 8), height: 1, color: kBorder),
