@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../data/dummy_data.dart';
+import '../../data/firestore_service.dart';
 import '../../screens/login_screen.dart';
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
@@ -38,10 +38,6 @@ class RestaurantHomeScreen extends StatefulWidget {
 class _RestaurantHomeScreenState extends State<RestaurantHomeScreen> {
   int _selectedIndex = 0;
 
-  Map<String, dynamic> get restaurant => restaurants.firstWhere((r) => r['id'] == widget.restaurantId);
-  List<Map<String, dynamic>> get myMenuItems => menuItems.where((m) => m['restaurantId'] == widget.restaurantId).toList();
-  List<Map<String, dynamic>> get myOrders => orders.where((o) => o['restaurantId'] == widget.restaurantId).toList();
-
   final List<({IconData icon, String label})> _navItems = const [
     (icon: Icons.dashboard_rounded, label: 'Stats'),
     (icon: Icons.restaurant_menu_rounded, label: 'Menu'),
@@ -50,45 +46,85 @@ class _RestaurantHomeScreenState extends State<RestaurantHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: kSurface,
-        elevation: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: NetworkImage(restaurant['image']),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: FirestoreService.instance.restaurantsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: kBg,
+            body: Center(
+                child: CircularProgressIndicator(color: kPrimary)),
+          );
+        }
+
+        final allRestaurants = snapshot.data ?? const [];
+        final restaurant = allRestaurants.firstWhere(
+              (r) => r['id'] == widget.restaurantId,
+          orElse: () => <String, dynamic>{
+            'name': 'Restaurant',
+            'image': '',
+            'category': '',
+            'deliveryTime': '',
+            'deliveryFee': '',
+            'rating': 0,
+          },
+        );
+
+        return Scaffold(
+          backgroundColor: kBg,
+          appBar: AppBar(
+            backgroundColor: kSurface,
+            elevation: 0,
+            title: Row(
               children: [
-                Text(restaurant['name'], style: _h2),
-                Text('Restaurant Panel', style: _caption.copyWith(color: kPrimary)),
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage: (restaurant['image'] ?? '')
+                      .toString()
+                      .isNotEmpty
+                      ? NetworkImage(restaurant['image'])
+                      : null,
+                  child: (restaurant['image'] ?? '').toString().isEmpty
+                      ? const Icon(Icons.storefront, size: 18)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(restaurant['name'] ?? '', style: _h2),
+                    Text('Restaurant Panel',
+                        style: _caption.copyWith(color: kPrimary)),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: kRed),
-            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: kRed),
+                onPressed: () => Navigator.pushReplacement(context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen())),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: _buildBody(),
-      bottomNavigationBar: _buildBottomNav(),
+          body: _buildBody(restaurant),
+          bottomNavigationBar: _buildBottomNav(),
+        );
+      },
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(Map<String, dynamic> restaurant) {
     switch (_selectedIndex) {
-      case 0: return _DashboardTab(restaurant: restaurant, menuCount: myMenuItems.length, orderCount: myOrders.length);
-      case 1: return _MenuTab(restaurantId: widget.restaurantId, items: myMenuItems, onUpdate: () => setState(() {}));
-      case 2: return _OrdersTab(orders: myOrders, onUpdate: () => setState(() {}));
-      default: return const SizedBox();
+      case 0:
+        return _DashboardTab(
+            restaurant: restaurant, restaurantId: widget.restaurantId);
+      case 1:
+        return _MenuTab(restaurantId: widget.restaurantId);
+      case 2:
+        return _OrdersTab(restaurantId: widget.restaurantId);
+      default:
+        return const SizedBox();
     }
   }
 
@@ -124,50 +160,75 @@ class _RestaurantHomeScreenState extends State<RestaurantHomeScreen> {
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 class _DashboardTab extends StatelessWidget {
   final Map<String, dynamic> restaurant;
-  final int menuCount;
-  final int orderCount;
+  final int restaurantId;
 
-  const _DashboardTab({required this.restaurant, required this.menuCount, required this.orderCount});
+  const _DashboardTab({required this.restaurant, required this.restaurantId});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text('Performance Overview', style: _h1),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            _StatCard(label: 'Total Orders', value: '$orderCount', icon: Icons.receipt_long, color: kBlue),
-            const SizedBox(width: 15),
-            _StatCard(label: 'Rating', value: '${restaurant['rating']}', icon: Icons.star, color: kAmber),
-          ],
-        ),
-        const SizedBox(height: 15),
-        Row(
-          children: [
-            _StatCard(label: 'Menu Items', value: '$menuCount', icon: Icons.menu_book, color: kGreen),
-            const SizedBox(width: 15),
-            _StatCard(label: 'Revenue', value: 'Rs 12.5k', icon: Icons.payments, color: kPurple),
-          ],
-        ),
-        const SizedBox(height: 30),
-        Text('Restaurant Details', style: _h2),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(15), border: Border.all(color: kBorder)),
-          child: Column(
-            children: [
-              _InfoRow(Icons.category, 'Category', restaurant['category']),
-              const Divider(),
-              _InfoRow(Icons.timer, 'Delivery Time', restaurant['deliveryTime']),
-              const Divider(),
-              _InfoRow(Icons.local_shipping, 'Fee', restaurant['deliveryFee']),
-            ],
-          ),
-        ),
-      ],
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: FirestoreService.instance
+          .menuItemsForRestaurantStream(restaurantId),
+      builder: (context, menuSnap) {
+        final menuCount = menuSnap.data?.length ?? 0;
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: FirestoreService.instance
+              .ordersForRestaurantStream(restaurantId),
+          builder: (context, orderSnap) {
+            final orders = orderSnap.data ?? const [];
+            final orderCount = orders.length;
+
+            // Sum of Delivered orders only — actual completed revenue,
+            // excluding Pending/Preparing/Out for Delivery/Cancelled.
+            final deliveredOrders =
+            orders.where((o) => o['status'] == 'Delivered');
+            final totalRevenue = deliveredOrders.fold<double>(
+                0.0, (sum, o) => sum + ((o['total'] ?? 0) as num).toDouble());
+            final revenueLabel = totalRevenue >= 1000
+                ? 'Rs ${(totalRevenue / 1000).toStringAsFixed(1)}k'
+                : 'Rs ${totalRevenue.toStringAsFixed(0)}';
+
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text('Performance Overview', style: _h1),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    _StatCard(label: 'Total Orders', value: '$orderCount', icon: Icons.receipt_long, color: kBlue),
+                    const SizedBox(width: 15),
+                    _StatCard(label: 'Rating', value: '${restaurant['rating'] ?? 0}', icon: Icons.star, color: kAmber),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    _StatCard(label: 'Menu Items', value: '$menuCount', icon: Icons.menu_book, color: kGreen),
+                    const SizedBox(width: 15),
+                    _StatCard(label: 'Revenue', value: revenueLabel, icon: Icons.payments, color: kPurple),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                Text('Restaurant Details', style: _h2),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(15), border: Border.all(color: kBorder)),
+                  child: Column(
+                    children: [
+                      _InfoRow(Icons.category, 'Category', '${restaurant['category'] ?? ''}'),
+                      const Divider(),
+                      _InfoRow(Icons.timer, 'Delivery Time', '${restaurant['deliveryTime'] ?? ''}'),
+                      const Divider(),
+                      _InfoRow(Icons.local_shipping, 'Fee', '${restaurant['deliveryFee'] ?? ''}'),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -225,10 +286,8 @@ class _InfoRow extends StatelessWidget {
 // ── Menu Tab (CRUD) ───────────────────────────────────────────────────────────
 class _MenuTab extends StatelessWidget {
   final int restaurantId;
-  final List<Map<String, dynamic>> items;
-  final VoidCallback onUpdate;
 
-  const _MenuTab({required this.restaurantId, required this.items, required this.onUpdate});
+  const _MenuTab({required this.restaurantId});
 
   void _showAddEditItem(BuildContext context, [Map<String, dynamic>? item]) {
     final isEditing = item != null;
@@ -258,25 +317,28 @@ class _MenuTab extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                onPressed: () {
+                onPressed: () async {
+                  final price = double.tryParse(priceController.text) ?? 0.0;
                   if (isEditing) {
-                    item['name'] = nameController.text;
-                    item['price'] = double.tryParse(priceController.text) ?? 0.0;
-                    item['description'] = descController.text;
-                    item['image'] = imageController.text;
+                    await FirestoreService.instance.updateMenuItem(
+                      item['docId'] as String,
+                      {
+                        'name': nameController.text,
+                        'price': price,
+                        'description': descController.text,
+                        'image': imageController.text,
+                      },
+                    );
                   } else {
-                    menuItems.add({
-                      'id': DateTime.now().millisecondsSinceEpoch,
-                      'restaurantId': restaurantId,
-                      'name': nameController.text,
-                      'price': double.tryParse(priceController.text) ?? 0.0,
-                      'description': descController.text,
-                      'image': imageController.text,
-                      'category': 'Custom',
-                    });
+                    await FirestoreService.instance.addMenuItem(
+                      restaurantId: restaurantId,
+                      name: nameController.text,
+                      price: price,
+                      description: descController.text,
+                      image: imageController.text,
+                    );
                   }
-                  Navigator.pop(context);
-                  onUpdate();
+                  if (ctx.mounted) Navigator.pop(ctx);
                 },
                 child: Text(isEditing ? 'Update Item' : 'Add Item', style: const TextStyle(color: Colors.white)),
               ),
@@ -308,33 +370,59 @@ class _MenuTab extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: items.length,
-            itemBuilder: (_, i) {
-              final item = items[i];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(10),
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(item['image'], width: 60, height: 60, fit: BoxFit.cover),
-                  ),
-                  title: Text(item['name'], style: _h2),
-                  subtitle: Text('Rs ${item['price']}', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(icon: const Icon(Icons.edit, color: kBlue), onPressed: () => _showAddEditItem(context, item)),
-                      IconButton(icon: const Icon(Icons.delete, color: kRed), onPressed: () {
-                        menuItems.remove(item);
-                        onUpdate();
-                      }),
-                    ],
-                  ),
-                ),
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: FirestoreService.instance
+                .menuItemsForRestaurantStream(restaurantId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: kPrimary));
+              }
+              final items = snapshot.data ?? const [];
+              if (items.isEmpty) {
+                return Center(
+                  child: Text('No menu items yet — tap "Add Item" to start',
+                      style: _body, textAlign: TextAlign.center),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(10),
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: (item['image'] ?? '').toString().isNotEmpty
+                            ? Image.network(item['image'], width: 60, height: 60, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                                width: 60, height: 60, color: kBg,
+                                child: const Icon(Icons.fastfood, color: kTextHint)))
+                            : Container(width: 60, height: 60, color: kBg,
+                            child: const Icon(Icons.fastfood, color: kTextHint)),
+                      ),
+                      title: Text(item['name'] ?? '', style: _h2),
+                      subtitle: Text('Rs ${item['price']}', style: const TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(icon: const Icon(Icons.edit, color: kBlue), onPressed: () => _showAddEditItem(context, item)),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: kRed),
+                            onPressed: () async {
+                              await FirestoreService.instance
+                                  .deleteMenuItem(item['docId'] as String);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -346,10 +434,9 @@ class _MenuTab extends StatelessWidget {
 
 // ── Orders Tab ────────────────────────────────────────────────────────────────
 class _OrdersTab extends StatefulWidget {
-  final List<Map<String, dynamic>> orders;
-  final VoidCallback onUpdate;
+  final int restaurantId;
 
-  const _OrdersTab({required this.orders, required this.onUpdate});
+  const _OrdersTab({required this.restaurantId});
 
   @override
   State<_OrdersTab> createState() => _OrdersTabState();
@@ -358,11 +445,11 @@ class _OrdersTab extends StatefulWidget {
 class _OrdersTabState extends State<_OrdersTab> {
   String _selectedFilter = 'Active'; // Active vs History
 
-  List<Map<String, dynamic>> get _filteredOrders {
+  List<Map<String, dynamic>> _filter(List<Map<String, dynamic>> orders) {
     if (_selectedFilter == 'Active') {
-      return widget.orders.where((o) => o['status'] != 'Delivered' && o['status'] != 'Cancelled').toList();
+      return orders.where((o) => o['status'] != 'Delivered' && o['status'] != 'Cancelled').toList();
     } else {
-      return widget.orders.where((o) => o['status'] == 'Delivered' || o['status'] == 'Cancelled').toList();
+      return orders.where((o) => o['status'] == 'Delivered' || o['status'] == 'Cancelled').toList();
     }
   }
 
@@ -410,110 +497,121 @@ class _OrdersTabState extends State<_OrdersTab> {
           ),
         ),
         Expanded(
-          child: _filteredOrders.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.receipt_long_outlined, size: 64, color: kTextHint.withOpacity(0.5)),
-                      const SizedBox(height: 16),
-                      Text('No $_selectedFilter Orders', style: _h2.copyWith(color: kTextSub)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  itemCount: _filteredOrders.length,
-                  itemBuilder: (_, i) {
-                    final order = _filteredOrders[i];
-                    final color = _getStatusColor(order['status']);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: kSurface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: kBorder),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-                      ),
-                      child: Column(
-                        children: [
-                          // Header
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                                  child: Icon(Icons.shopping_bag_outlined, color: color, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(order['id'], style: _caption.copyWith(fontWeight: FontWeight.bold, color: kTextSub)),
-                                      Text(order['customerName'], style: _h2),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                                  child: Text(order['status'], style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 1, color: kBorder),
-                          // Details
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                _OrderInfoRow(Icons.location_on_outlined, order['address']),
-                                const SizedBox(height: 8),
-                                _OrderInfoRow(Icons.phone_outlined, order['customerPhone']),
-                                const SizedBox(height: 12),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(12)),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('ITEMS', style: _caption.copyWith(letterSpacing: 1)),
-                                      const SizedBox(height: 4),
-                                      Text((order['items'] as List).join(', '), style: _body.copyWith(color: kText, fontWeight: FontWeight.w500)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Footer / Actions
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Rs ${order['total']}', style: _h1.copyWith(color: kPrimary)),
-                                if (_selectedFilter == 'Active')
-                                  _StatusPicker(
-                                    currentStatus: order['status'],
-                                    onChanged: (val) {
-                                      order['status'] = val;
-                                      widget.onUpdate();
-                                    },
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: FirestoreService.instance
+                .ordersForRestaurantStream(widget.restaurantId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: kPrimary));
+              }
+              final filteredOrders = _filter(snapshot.data ?? const []);
+
+              return filteredOrders.isEmpty
+                  ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.receipt_long_outlined, size: 64, color: kTextHint.withOpacity(0.5)),
+                    const SizedBox(height: 16),
+                    Text('No $_selectedFilter Orders', style: _h2.copyWith(color: kTextSub)),
+                  ],
                 ),
+              )
+                  : ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                itemCount: filteredOrders.length,
+                itemBuilder: (_, i) {
+                  final order = filteredOrders[i];
+                  final color = _getStatusColor(order['status']);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: kSurface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: kBorder),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                                child: Icon(Icons.shopping_bag_outlined, color: color, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(order['id'] ?? '', style: _caption.copyWith(fontWeight: FontWeight.bold, color: kTextSub)),
+                                    Text(order['customerName'] ?? '', style: _h2),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                                child: Text(order['status'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: kBorder),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              _OrderInfoRow(Icons.location_on_outlined, order['address'] ?? ''),
+                              const SizedBox(height: 8),
+                              _OrderInfoRow(Icons.phone_outlined, order['customerPhone'] ?? ''),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(12)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('ITEMS', style: _caption.copyWith(letterSpacing: 1)),
+                                    const SizedBox(height: 4),
+                                    Text((order['items'] as List? ?? const []).join(', '), style: _body.copyWith(color: kText, fontWeight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Rs ${order['total']}', style: _h1.copyWith(color: kPrimary)),
+                              if (_selectedFilter == 'Active')
+                                _StatusPicker(
+                                  currentStatus: order['status'] ?? '',
+                                  onChanged: (val) async {
+                                    await FirestoreService.instance
+                                        .updateOrderStatus(
+                                        order['docId'] as String,
+                                        val);
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ],
     );

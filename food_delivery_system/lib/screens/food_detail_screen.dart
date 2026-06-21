@@ -26,7 +26,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   double get _totalPrice {
     double base = widget.item['price'] * _quantity;
     double extrasPrice =
-        _extras.values.where((v) => v).length * 1.5; // $1.5 per extra
+        _extras.values.where((v) => v).length * 100; // Rs 100 per extra
     return base + extrasPrice;
   }
 
@@ -129,7 +129,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                                     fontWeight: FontWeight.bold)),
                           ),
                           Text(
-                              '\$${item['price'].toStringAsFixed(2)}',
+                              'Rs ${item['price'].toStringAsFixed(2)}',
                               style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
@@ -206,7 +206,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const SizedBox(height: 20),
 
                       // Extras / toppings
-                      const Text('Add Extras (+\$1.50 each)',
+                      const Text('Add Extras (+Rs 100 each)',
                           style: TextStyle(
                               fontSize: 17, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
@@ -318,7 +318,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold)),
-                    Text('\$${_totalPrice.toStringAsFixed(2)}',
+                    Text('Rs ${_totalPrice.toStringAsFixed(2)}',
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,

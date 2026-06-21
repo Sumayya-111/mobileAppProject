@@ -15,7 +15,21 @@ class CartManager extends ChangeNotifier {
       _items.fold(0.0, (sum, item) =>
       sum + (item['price'] as double) * (item['quantity'] as int));
 
-  double get deliveryFee => _items.isEmpty ? 0.0 : 2.99;
+  /// The restaurant's actual deliveryFee (e.g. "Rs 200" or "Free"), parsed
+  /// from whatever is stored on the cart items (added via _addToCart in
+  /// restaurant_detail_screen.dart). Falls back to 0 if missing/unparseable
+  /// rather than silently charging the wrong hardcoded amount.
+  double get deliveryFee {
+    if (_items.isEmpty) return 0.0;
+    final raw = (_items.first['restaurantDeliveryFee'] ?? '').toString();
+    if (raw.isEmpty) return 0.0;
+    if (raw.toLowerCase().contains('free')) return 0.0;
+    // Matches a real number like "200" or "199.50" — requires at least
+    // one digit, so a stray "." from "Rs." is never matched on its own.
+    final digits = RegExp(r'\d+(\.\d+)?').firstMatch(raw)?.group(0);
+    return digits != null ? double.tryParse(digits) ?? 0.0 : 0.0;
+  }
+
 
   double get tax => subtotal * 0.08;
 

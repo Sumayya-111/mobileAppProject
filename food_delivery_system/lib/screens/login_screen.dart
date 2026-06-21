@@ -8,6 +8,8 @@ import 'home_screen.dart';
 import 'forgot_password_screen.dart';
 import 'package:food_delivery_system/admin/screens/admin_home_screen.dart';
 import 'package:food_delivery_system/restaurant/screens/restaurant_home_screen.dart';
+import '../data/firestore_service.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -199,6 +201,54 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // 0. Check if this is a restaurant owner's FIRST login — i.e. admin
+      // created a restaurant listing with these exact email/temp-password
+      // credentials, but no Firebase Auth account exists for it yet.
+      // If so, activate the account now instead of attempting a normal
+      // sign-in (which would fail since the account doesn't exist).
+      final unclaimedRestaurant = await FirestoreService.instance
+          .findUnclaimedRestaurant(email, password);
+
+      if (unclaimedRestaurant != null) {
+        // Create the real Firebase Auth account using these credentials.
+        UserCredential newCred = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+
+        await newCred.user!.updateDisplayName(
+            unclaimedRestaurant['name'] ?? 'Restaurant Owner');
+
+        // Create the linked users/{uid} doc with role 'Restaurant' and a
+        // restaurantId pointing back at the numeric id already used by
+        // menu_items/orders throughout the app.
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(newCred.user!.uid)
+            .set({
+          'uid': newCred.user!.uid,
+          'name': unclaimedRestaurant['name'] ?? '',
+          'displayName': unclaimedRestaurant['name'] ?? '',
+          'email': email,
+          'role': 'Restaurant',
+          'restaurantId': unclaimedRestaurant['id'],
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        });
+
+        // Mark the restaurant as claimed and linked to this account.
+        await FirestoreService.instance.claimRestaurant(
+            unclaimedRestaurant['docId'] as String, newCred.user!.uid);
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+                builder: (_) => RestaurantHomeScreen(
+                    restaurantId: unclaimedRestaurant['id'] as int)),
+          );
+        }
+        return;
+      }
+
       // 1. Sign in with Firebase
       UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
@@ -221,7 +271,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (dbRole == 'Admin') {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdminHomeScreen()));
         } else if (dbRole == 'Restaurant') {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RestaurantHomeScreen()));
+          final data = userDoc.data() as Map<String, dynamic>;
+          final restaurantId = data['restaurantId'] as int? ?? 1;
+          Navigator.pushReplacement(context, MaterialPageRoute(
+              builder: (_) => RestaurantHomeScreen(restaurantId: restaurantId)));
         } else {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
         }

@@ -184,7 +184,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '\$${((item['price'] as num).toDouble()).toStringAsFixed(2)}',
+                      'Rs ${((item['price'] as num).toDouble()).toStringAsFixed(2)}',
                       style: const TextStyle(
                           color: Color(0xFFFF6B35),
                           fontWeight: FontWeight.w600),
@@ -322,12 +322,12 @@ class _CartScreenState extends State<CartScreen> {
           const Divider(),
           const SizedBox(height: 8),
           _priceRow('Subtotal',
-              '\$${_cart.subtotal.toStringAsFixed(2)}'),
+              'Rs ${_cart.subtotal.toStringAsFixed(2)}'),
           _priceRow('Delivery Fee',
-              '\$${_cart.deliveryFee.toStringAsFixed(2)}'),
-          _priceRow('Tax (8%)', '\$${_cart.tax.toStringAsFixed(2)}'),
+              'Rs ${_cart.deliveryFee.toStringAsFixed(2)}'),
+          _priceRow('Tax (8%)', 'Rs ${_cart.tax.toStringAsFixed(2)}'),
           const Divider(),
-          _priceRow('Total', '\$${_cart.total.toStringAsFixed(2)}',
+          _priceRow('Total', 'Rs ${_cart.total.toStringAsFixed(2)}',
               isBold: true),
           const SizedBox(height: 16),
           // Checkout button
@@ -339,8 +339,8 @@ class _CartScreenState extends State<CartScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        OrderConfirmationScreen(total: _cart.total),
+                    builder: (_) => OrderConfirmationScreen(
+                        total: _cart.total, cartItems: _cart.items),
                   ),
                 );
               },
@@ -350,7 +350,7 @@ class _CartScreenState extends State<CartScreen> {
                     borderRadius: BorderRadius.circular(14)),
               ),
               child: Text(
-                'Proceed to Checkout • \$${_cart.total.toStringAsFixed(2)}',
+                'Proceed to Checkout • Rs ${_cart.total.toStringAsFixed(2)}',
                 style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,

@@ -25,7 +25,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
   
   String _selectedRole = 'User'; // Default role
-  final List<String> _roles = ['User', 'Restaurant', 'Admin'];
+  final List<String> _roles = ['User']; // Restaurant & Admin accounts are created by an admin, not via self-signup
 
   Future<void> _signUp() async {
   // Validation checks

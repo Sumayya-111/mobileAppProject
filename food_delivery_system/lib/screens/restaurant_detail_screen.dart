@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:food_delivery_system/data/cart_manager.dart';
-import '../data/dummy_data.dart';
+import '../data/firestore_service.dart';
 import 'food_detail_screen.dart';
 import 'cart_screen.dart';
 
@@ -21,21 +21,21 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
   // ── CartManager singleton ──────────────────────────────────────────────────
   final CartManager _cart = CartManager.instance;
 
-  // ── Menu items for this restaurant ────────────────────────────────────────
-  List<Map<String, dynamic>> get _menuItems {
-    return menuItems
-        .where((item) => item['restaurantId'] == widget.restaurant['id'])
-        .toList();
-  }
+  // ── Menu items for this restaurant — live from Firestore ────────────────
+  late final Stream<List<Map<String, dynamic>>> _menuItemsStream =
+  FirestoreService.instance
+      .menuItemsForRestaurantStream(widget.restaurant['id']);
 
   // ── Add to cart ────────────────────────────────────────────────────────────
   void _addToCart(Map<String, dynamic> item) {
     _cart.addItem({
-      'id':    item['id'],
-      'name':  item['name'],
-      'price': (item['price'] as num).toDouble(),
-      'image': item['image'] ?? item['img'] ?? '',
-      'color': item['color'] ?? 0xFFFF6B35,
+      'id':                   item['id'],
+      'name':                 item['name'],
+      'price':                (item['price'] as num).toDouble(),
+      'image':                item['image'] ?? item['img'] ?? '',
+      'color':                item['color'] ?? 0xFFFF6B35,
+      'restaurantId':         item['restaurantId'] ?? widget.restaurant['id'],
+      'restaurantDeliveryFee': widget.restaurant['deliveryFee'] ?? '',
     });
 
     // Rebuild so cart badge updates instantly
@@ -246,166 +246,176 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
 
             // ── Menu items ───────────────────────────────────────────────────
             Expanded(
-              child: _menuItems.isEmpty
-                  ? const Center(child: Text('No items available'))
-                  : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _menuItems.length,
-                itemBuilder: (context, index) {
-                  final item = _menuItems[index];
-                  final int qtyInCart =
-                  _cart.quantityOf(item['id']);
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _menuItemsStream,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(
+                        color: Color(0xFFFF6B35)));
+                  }
+                  final menuItemsList = snapshot.data ?? const [];
+                  return menuItemsList.isEmpty
+                      ? const Center(child: Text('No items available'))
+                      : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: menuItemsList.length,
+                    itemBuilder: (context, index) {
+                      final item = menuItemsList[index];
+                      final int qtyInCart =
+                      _cart.quantityOf(item['id']);
 
-                  return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FoodDetailScreen(
-                            item: item,
-                            onAddToCart: _addToCart),
-                      ),
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // ── Food image ───────────────────────────────
-                          ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(16),
-                              bottomLeft: Radius.circular(16),
-                            ),
-                            child: Image.network(
-                              (item['image'] ?? item['img'] ?? '')
-                              as String,
-                              width: 90,
-                              height: 90,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 90,
-                                height: 90,
-                                color: Color(
-                                    (item['color'] ??
-                                        0xFFFF6B35) as int)
-                                    .withOpacity(0.1),
-                                child: const Icon(Icons.fastfood,
-                                    color: Colors.grey, size: 36),
-                              ),
-                            ),
+                      return GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FoodDetailScreen(
+                                item: item,
+                                onAddToCart: _addToCart),
                           ),
-                          // ── Info ─────────────────────────────────────
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  if (item['isPopular'] == true)
-                                    Container(
-                                      padding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange
-                                            .withOpacity(0.1),
-                                        borderRadius:
-                                        BorderRadius.circular(6),
-                                      ),
-                                      child: const Text('🔥 Popular',
-                                          style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.orange,
-                                              fontWeight:
-                                              FontWeight.bold)),
-                                    ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    (item['name'] ?? '') as String,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15),
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              )
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              // ── Food image ───────────────────────────────
+                              ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  bottomLeft: Radius.circular(16),
+                                ),
+                                child: Image.network(
+                                  (item['image'] ?? item['img'] ?? '')
+                                  as String,
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 90,
+                                    height: 90,
+                                    color: Color(
+                                        (item['color'] ??
+                                            0xFFFF6B35) as int)
+                                        .withOpacity(0.1),
+                                    child: const Icon(Icons.fastfood,
+                                        color: Colors.grey, size: 36),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    (item['description'] ?? '') as String,
-                                    style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                                ),
+                              ),
+                              // ── Info ─────────────────────────────────────
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
+                                      if (item['isPopular'] == true)
+                                        Container(
+                                          padding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange
+                                                .withOpacity(0.1),
+                                            borderRadius:
+                                            BorderRadius.circular(6),
+                                          ),
+                                          child: const Text('🔥 Popular',
+                                              style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.orange,
+                                                  fontWeight:
+                                                  FontWeight.bold)),
+                                        ),
+                                      const SizedBox(height: 4),
                                       Text(
-                                        '\$${((item['price'] as num).toDouble()).toStringAsFixed(2)}',
+                                        (item['name'] ?? '') as String,
                                         style: const TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color: Color(0xFFFF6B35)),
+                                            fontSize: 15),
                                       ),
-                                      // ── Add / qty control ──────────
-                                      qtyInCart == 0
-                                          ? GestureDetector(
-                                        onTap: () =>
-                                            _addToCart(item),
-                                        child: Container(
-                                          padding:
-                                          const EdgeInsets
-                                              .all(6),
-                                          decoration:
-                                          const BoxDecoration(
-                                            color:
-                                            Color(0xFFFF6B35),
-                                            shape:
-                                            BoxShape.circle,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        (item['description'] ?? '') as String,
+                                        style: const TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 12),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Rs ${((item['price'] as num).toDouble()).toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: Color(0xFFFF6B35)),
                                           ),
-                                          child: const Icon(
-                                              Icons.add,
-                                              color: Colors.white,
-                                              size: 18),
-                                        ),
-                                      )
-                                          : _InlineQtyControl(
-                                        quantity: qtyInCart,
-                                        onAdd: () =>
-                                            _addToCart(item),
-                                        onRemove: () {
-                                          final idx = _cart.items
-                                              .indexWhere((c) =>
-                                          c['id'] ==
-                                              item['id']);
-                                          if (idx >= 0) {
-                                            _cart.updateQuantity(
-                                                idx, -1);
-                                            setState(() {});
-                                          }
-                                        },
+                                          // ── Add / qty control ──────────
+                                          qtyInCart == 0
+                                              ? GestureDetector(
+                                            onTap: () =>
+                                                _addToCart(item),
+                                            child: Container(
+                                              padding:
+                                              const EdgeInsets
+                                                  .all(6),
+                                              decoration:
+                                              const BoxDecoration(
+                                                color:
+                                                Color(0xFFFF6B35),
+                                                shape:
+                                                BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                  Icons.add,
+                                                  color: Colors.white,
+                                                  size: 18),
+                                            ),
+                                          )
+                                              : _InlineQtyControl(
+                                            quantity: qtyInCart,
+                                            onAdd: () =>
+                                                _addToCart(item),
+                                            onRemove: () {
+                                              final idx = _cart.items
+                                                  .indexWhere((c) =>
+                                              c['id'] ==
+                                                  item['id']);
+                                              if (idx >= 0) {
+                                                _cart.updateQuantity(
+                                                    idx, -1);
+                                                setState(() {});
+                                              }
+                                            },
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

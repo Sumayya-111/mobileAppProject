@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../data/dummy_data.dart' as dummy; // Keep for fallback or types if needed
 import '../../screens/login_screen.dart';
+import '../../data/firestore_service.dart';
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const kPrimary = Color(0xFFFF6B35);
@@ -596,7 +597,7 @@ class _DashboardTab extends StatelessWidget {
                 final totalRestaurants = restaurantsList.length;
                 final totalOrders = ordersList.length;
                 final totalMenuItems = menuItemsList.length;
-                
+
                 double avgRating = 0;
                 if (restaurantsList.isNotEmpty) {
                   final sum = restaurantsList.fold<double>(0, (s, r) => s + ((r['rating'] ?? 0.0) as num).toDouble());
@@ -649,7 +650,7 @@ class _DashboardTab extends StatelessWidget {
                     ),
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) => Padding(
+                            (context, i) => Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                           child: _RestaurantCard(r: restaurantsList[i]),
                         ),
@@ -1035,8 +1036,12 @@ class _RestaurantsTabState extends State<_RestaurantsTab> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddRestaurantSheet(
-        onAdd: (newRestaurant) async {
-          await FirebaseFirestore.instance.collection('restaurants').add(newRestaurant);
+        onAdd: (newRestaurant, ownerEmail, tempPassword) async {
+          await FirestoreService.instance.createRestaurantWithCredentials(
+            restaurantFields: newRestaurant,
+            ownerEmail: ownerEmail,
+            tempPassword: tempPassword,
+          );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('${newRestaurant['name']} added!'),
@@ -1044,6 +1049,31 @@ class _RestaurantsTabState extends State<_RestaurantsTab> {
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ));
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text('Restaurant Login Credentials'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Share these with the restaurant owner. They will use them to activate their account on first login.'),
+                    const SizedBox(height: 16),
+                    SelectableText('Email: $ownerEmail', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    SelectableText('Password: $tempPassword', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            );
           }
         },
       ),
@@ -1057,53 +1087,53 @@ class _RestaurantsTabState extends State<_RestaurantsTab> {
       body: Column(
         children: [
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('restaurants').snapshots(),
-            builder: (context, snapshot) {
-              final restaurantsList = snapshot.data?.docs ?? [];
-              final filtered = restaurantsList.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return (data['name'] as String).toLowerCase().contains(_search.toLowerCase()) ||
-                       (data['category'] as String).toLowerCase().contains(_search.toLowerCase());
-              }).toList();
+              stream: FirebaseFirestore.instance.collection('restaurants').snapshots(),
+              builder: (context, snapshot) {
+                final restaurantsList = snapshot.data?.docs ?? [];
+                final filtered = restaurantsList.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return (data['name'] as String).toLowerCase().contains(_search.toLowerCase()) ||
+                      (data['category'] as String).toLowerCase().contains(_search.toLowerCase());
+                }).toList();
 
-              return Expanded(
-                child: Column(
-                  children: [
-                    _PageHeader(
-                        title: 'Restaurants',
-                        subtitle: '${restaurantsList.length} listed on platform'),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: _SearchBar(
-                        hint: 'Search by name or category…',
-                        onChanged: (v) => setState(() => _search = v),
+                return Expanded(
+                  child: Column(
+                    children: [
+                      _PageHeader(
+                          title: 'Restaurants',
+                          subtitle: '${restaurantsList.length} listed on platform'),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: _SearchBar(
+                          hint: 'Search by name or category…',
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: snapshot.connectionState == ConnectionState.waiting
-                          ? const Center(child: CircularProgressIndicator())
-                          : filtered.isEmpty
-                              ? const _EmptyState(message: 'No restaurants found')
-                              : ListView.builder(
-                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                                  itemCount: filtered.length,
-                                  itemBuilder: (_, i) {
-                                    final doc = filtered[i];
-                                    final r = doc.data() as Map<String, dynamic>;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 10),
-                                      child: _RestaurantCard(
-                                        r: r,
-                                        onDelete: () => _deleteRestaurant(r, doc.id),
-                                      ),
-                                    );
-                                  },
-                                ),
-                    ),
-                  ],
-                ),
-              );
-            }
+                      Expanded(
+                        child: snapshot.connectionState == ConnectionState.waiting
+                            ? const Center(child: CircularProgressIndicator())
+                            : filtered.isEmpty
+                            ? const _EmptyState(message: 'No restaurants found')
+                            : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final doc = filtered[i];
+                            final r = doc.data() as Map<String, dynamic>;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _RestaurantCard(
+                                r: r,
+                                onDelete: () => _deleteRestaurant(r, doc.id),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
           ),
         ],
       ),
@@ -1195,84 +1225,84 @@ class _OrdersTabState extends State<_OrdersTab> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
-      builder: (context, snapshot) {
-        final allOrders = snapshot.data?.docs ?? [];
-        final filtered = _selectedStatus == 'All' 
-            ? allOrders 
-            : allOrders.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == _selectedStatus).toList();
+        stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+        builder: (context, snapshot) {
+          final allOrders = snapshot.data?.docs ?? [];
+          final filtered = _selectedStatus == 'All'
+              ? allOrders
+              : allOrders.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == _selectedStatus).toList();
 
-        return Column(
-          children: [
-            _PageHeader(
-              title: 'Orders',
-              subtitle: '${allOrders.length} total · ${allOrders.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Pending').length} pending',
-            ),
-            SizedBox(
-              height: 56,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                itemCount: _statuses.length,
-                itemBuilder: (_, i) {
-                  final s = _statuses[i];
-                  final isActive = _selectedStatus == s;
-                  final color = s == 'All' ? kText : _statusColor(s);
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedStatus = s),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isActive ? color : kSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: isActive ? color : kBorder),
-                      ),
-                      child: Text(s,
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? Colors.white : kTextSub)),
-                    ),
-                  );
-                },
+          return Column(
+            children: [
+              _PageHeader(
+                title: 'Orders',
+                subtitle: '${allOrders.length} total · ${allOrders.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Pending').length} pending',
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('${filtered.length} order${filtered.length != 1 ? 's' : ''}', style: _caption),
-              ),
-            ),
-            Expanded(
-              child: snapshot.connectionState == ConnectionState.waiting
-                  ? const Center(child: CircularProgressIndicator())
-                  : filtered.isEmpty
-                      ? _EmptyState(message: 'No $_selectedStatus orders')
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                          itemCount: filtered.length,
-                          itemBuilder: (_, i) {
-                            final doc = filtered[i];
-                            final order = doc.data() as Map<String, dynamic>;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _OrderCard(
-                                order: order,
-                                statusColor: _statusColor,
-                                statusIcon: _statusIcon,
-                                onTap: () => _showOrderDetail(order, doc.id),
-                              ),
-                            );
-                          },
+              SizedBox(
+                height: 56,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  itemCount: _statuses.length,
+                  itemBuilder: (_, i) {
+                    final s = _statuses[i];
+                    final isActive = _selectedStatus == s;
+                    final color = s == 'All' ? kText : _statusColor(s);
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedStatus = s),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isActive ? color : kSurface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: isActive ? color : kBorder),
                         ),
-            ),
-          ],
-        );
-      }
+                        child: Text(s,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isActive ? Colors.white : kTextSub)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('${filtered.length} order${filtered.length != 1 ? 's' : ''}', style: _caption),
+                ),
+              ),
+              Expanded(
+                child: snapshot.connectionState == ConnectionState.waiting
+                    ? const Center(child: CircularProgressIndicator())
+                    : filtered.isEmpty
+                    ? _EmptyState(message: 'No $_selectedStatus orders')
+                    : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final doc = filtered[i];
+                    final order = doc.data() as Map<String, dynamic>;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _OrderCard(
+                        order: order,
+                        statusColor: _statusColor,
+                        statusIcon: _statusIcon,
+                        onTap: () => _showOrderDetail(order, doc.id),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }
     );
   }
 }
@@ -1690,7 +1720,7 @@ class _AnalyticsTab extends StatelessWidget {
 
             final totalRestaurants = restaurantsList.length;
             final totalMenuItems = menuItemsList.length;
-            
+
             double avgRating = 0;
             if (restaurantsList.isNotEmpty) {
               final sum = restaurantsList.fold<double>(0, (s, r) => s + ((r['rating'] ?? 0.0) as num).toDouble());
@@ -1737,7 +1767,7 @@ class _AnalyticsTab extends StatelessWidget {
                 ),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, i) {
+                        (context, i) {
                       final entry = sorted[i];
                       final color = colors[i % colors.length];
                       final pct = entry.value / maxVal;
@@ -2014,7 +2044,7 @@ class _EmptyState extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _AddRestaurantSheet extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAdd;
+  final Function(Map<String, dynamic>, String, String) onAdd;
   const _AddRestaurantSheet({required this.onAdd});
 
   @override
@@ -2032,6 +2062,7 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
   final _deliveryFeeController = TextEditingController();
   final _priceRangeController = TextEditingController();
   final _freeAboveController = TextEditingController();
+  final _ownerEmailController = TextEditingController();
 
   @override
   void dispose() {
@@ -2044,24 +2075,44 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
     _deliveryFeeController.dispose();
     _priceRangeController.dispose();
     _freeAboveController.dispose();
+    _ownerEmailController.dispose();
     super.dispose();
+  }
+
+  /// Generates a simple random temp password for the restaurant owner's
+  /// first login. Admin shares this + the email manually.
+  String _generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final rand = DateTime.now().millisecondsSinceEpoch;
+    final buffer = StringBuffer();
+    var seed = rand;
+    for (var i = 0; i < 8; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
+      buffer.write(chars[seed % chars.length]);
+    }
+    return buffer.toString();
   }
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      widget.onAdd({
-        'id': DateTime.now().millisecondsSinceEpoch,
-        'name': _nameController.text.trim(),
-        'description': _descController.text.trim(),
-        'image': _imageController.text.trim(),
-        'category': _categoryController.text.trim(),
-        'rating': double.tryParse(_ratingController.text.trim()) ?? 4.0,
-        'deliveryTime': _deliveryTimeController.text.trim(),
-        'deliveryFee': _deliveryFeeController.text.trim(),
-        'priceRange': _priceRangeController.text.trim(),
-        'freeAbove': _freeAboveController.text.trim(),
-        'color': 0xFFFF6B35,
-      });
+      final tempPassword = _generateTempPassword();
+      widget.onAdd(
+        {
+          'id': DateTime.now().millisecondsSinceEpoch,
+          'name': _nameController.text.trim(),
+          'description': _descController.text.trim(),
+          'image': _imageController.text.trim(),
+          'category': _categoryController.text.trim(),
+          'rating': double.tryParse(_ratingController.text.trim()) ?? 4.0,
+          'deliveryTime': _deliveryTimeController.text.trim(),
+          'deliveryFee': _deliveryFeeController.text.trim(),
+          'priceRange': _priceRangeController.text.trim(),
+          'freeAbove': _freeAboveController.text.trim(),
+          'color': 0xFFFF6B35,
+        },
+        _ownerEmailController.text.trim(),
+        tempPassword,
+      );
       Navigator.pop(context);
     }
   }
@@ -2184,6 +2235,26 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
                         label: 'Free Delivery Above (optional)',
                         hint: 'e.g. \$20',
                         icon: Icons.local_offer_outlined),
+                    const SizedBox(height: 8),
+                    Container(margin: const EdgeInsets.symmetric(vertical: 8), height: 1, color: kBorder),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('Restaurant Owner Login', style: _h3.copyWith(color: kPrimary)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'A temporary password will be generated. Share it with the restaurant owner — they activate their account by logging in with these credentials once.',
+                        style: _body.copyWith(fontSize: 12),
+                      ),
+                    ),
+                    _FormField(
+                        controller: _ownerEmailController,
+                        label: 'Owner Email',
+                        hint: 'e.g. owner@restaurant.com',
+                        icon: Icons.email_outlined,
+                        validator: (v) =>
+                        (v == null || !v.contains('@')) ? 'Valid email is required' : null),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,

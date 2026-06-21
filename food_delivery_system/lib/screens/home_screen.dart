@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:food_delivery_system/data/dummy_data.dart';
 import 'restaurant_detail_screen.dart';
 import 'category_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
 import 'dart:async';
 import '../data/cart_manager.dart';
+import '../data/firestore_service.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // HOME SCREEN  (root scaffold + bottom nav)
@@ -46,14 +46,29 @@ class _HomeScreenState extends State<HomeScreen> {
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F5F2),
-        body: IndexedStack(
-          index: _selectedIndex,
-          children: [
-            _HomeBody(onTabChange: (i) => setState(() => _selectedIndex = i)),
-            const CategoryScreen(),
-            const CartScreen(),
-            const ProfileScreen(),
-          ],
+        body: StreamBuilder<List<Map<String, dynamic>>>(
+          stream: FirestoreService.instance.restaurantsStream(),
+          builder: (context, snapshot) {
+            final restaurants = snapshot.data ?? const [];
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting;
+
+            return IndexedStack(
+              index: _selectedIndex,
+              children: [
+                isLoading
+                    ? const Center(child: CircularProgressIndicator(
+                    color: Color(0xFFFF6B35)))
+                    : _HomeBody(
+                    restaurants: restaurants,
+                    onTabChange: (i) =>
+                        setState(() => _selectedIndex = i)),
+                CategoryScreen(restaurants: restaurants),
+                const CartScreen(),
+                const ProfileScreen(),
+              ],
+            );
+          },
         ),
         bottomNavigationBar: _BottomNav(
           selectedIndex: _selectedIndex,
@@ -195,7 +210,8 @@ class _NavItem extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _SearchScreen extends StatefulWidget {
-  const _SearchScreen();
+  final List<Map<String, dynamic>> restaurants;
+  const _SearchScreen({required this.restaurants});
 
   @override
   State<_SearchScreen> createState() => _SearchScreenState();
@@ -226,7 +242,7 @@ class _SearchScreenState extends State<_SearchScreen> {
   List<Map<String, dynamic>> get _results {
     if (_query.trim().isEmpty) return [];
     final q = _query.toLowerCase();
-    return restaurants.where((r) {
+    return widget.restaurants.where((r) {
       final name = _str(r, ['name']).toLowerCase();
       final desc = _str(r, ['description', 'desc']).toLowerCase();
       final cat  = _str(r, ['category', 'tag']).toLowerCase();
@@ -419,7 +435,7 @@ class _SearchScreenState extends State<_SearchScreen> {
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF111111))),
         const SizedBox(height: 14),
-        ...restaurants
+        ...widget.restaurants
             .map((r) => _SearchResultTile(data: r))
             .toList(),
       ],
@@ -659,8 +675,9 @@ class _HighlightedText extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _HomeBody extends StatefulWidget {
+  final List<Map<String, dynamic>> restaurants;
   final ValueChanged<int> onTabChange;
-  const _HomeBody({required this.onTabChange});
+  const _HomeBody({required this.restaurants, required this.onTabChange});
 
   @override
   State<_HomeBody> createState() => _HomeBodyState();
@@ -731,7 +748,7 @@ class _HomeBodyState extends State<_HomeBody>
     final pills = <Map<String, String>>[
       {'label': 'All', 'img': _fallbackImg},
     ];
-    for (final r in restaurants) {
+    for (final r in widget.restaurants) {
       final cat = (r['category'] ?? r['tag'] ?? '') as String;
       if (cat.isNotEmpty && seen.add(cat)) {
         pills.add({
@@ -745,10 +762,10 @@ class _HomeBodyState extends State<_HomeBody>
 
   List<Map<String, dynamic>> get _filteredRestaurants {
     if (_selectedCategoryIndex == 0) {
-      return List<Map<String, dynamic>>.from(restaurants);
+      return List<Map<String, dynamic>>.from(widget.restaurants);
     }
     final label = _categoryPills[_selectedCategoryIndex]['label']!;
-    return restaurants
+    return widget.restaurants
         .where((r) =>
     (r['category'] ?? r['tag'] ?? '').toString() == label)
         .toList();
@@ -872,12 +889,25 @@ class _HomeBodyState extends State<_HomeBody>
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text('Hey Mohsin! 👋',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.4)),
+                  StreamBuilder<Map<String, dynamic>?>(
+                    stream: FirestoreService.instance
+                        .currentUserProfileStream(),
+                    builder: (context, snapshot) {
+                      final profile = snapshot.data;
+                      final name = (profile?['name'] ??
+                          profile?['displayName'] ??
+                          'there') as String;
+                      final firstName = name.trim().isNotEmpty
+                          ? name.trim().split(' ').first
+                          : 'there';
+                      return Text('Hey $firstName! 👋',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.4));
+                    },
+                  ),
                   const SizedBox(height: 2),
                   const Text('What are you craving today?',
                       style: TextStyle(
@@ -891,7 +921,7 @@ class _HomeBodyState extends State<_HomeBody>
           ),
           const SizedBox(height: 20),
           // ── Search bar ────────────────────────────────────────────────────
-          const _TappableSearchBar(),
+          _TappableSearchBar(restaurants: widget.restaurants),
         ],
       ),
     );
@@ -1138,8 +1168,8 @@ class _HomeBodyState extends State<_HomeBody>
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _TappableSearchBar extends StatelessWidget {
-  // FIX: no super.key — private widgets used with `const` don't need it
-  const _TappableSearchBar();
+  final List<Map<String, dynamic>> restaurants;
+  const _TappableSearchBar({required this.restaurants});
 
   @override
   Widget build(BuildContext context) {
@@ -1148,7 +1178,8 @@ class _TappableSearchBar extends StatelessWidget {
         Navigator.push(
           context,
           PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const _SearchScreen(),
+            pageBuilder: (_, __, ___) =>
+                _SearchScreen(restaurants: restaurants),
             transitionDuration: const Duration(milliseconds: 250),
             reverseTransitionDuration:
             const Duration(milliseconds: 220),
