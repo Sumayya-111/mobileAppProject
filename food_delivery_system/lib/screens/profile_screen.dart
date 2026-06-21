@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
+import 'order_history_screen.dart';
 import '../data/firestore_service.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -50,6 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               '') as String;
           final String phone =
           (profile?['phoneNumber'] ?? profile?['phone'] ?? '') as String;
+          final String address = (profile?['address'] ?? '') as String;
           final String initial =
           name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
 
@@ -105,19 +107,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(email,
                           style: const TextStyle(
                               color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _statCard('Orders', '24'),
-                          Container(
-                              width: 1, height: 40, color: Colors.white38),
-                          _statCard('Reviews', '12'),
-                          Container(
-                              width: 1, height: 40, color: Colors.white38),
-                          _statCard('Points', '580'),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -127,11 +116,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Account section
                 _sectionHeader('Account'),
                 _menuTile(Icons.person_outline, 'Edit Profile', onTap: () {
-                  _showEditProfileDialog(context, name, phone);
+                  _showEditProfileDialog(context, name, phone, address);
                 }),
-                _menuTile(Icons.location_on_outlined, 'Saved Addresses'),
-                _menuTile(Icons.payment_outlined, 'Payment Methods'),
-                _menuTile(Icons.history, 'Order History'),
+                _menuTile(Icons.history, 'Order History', onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const OrderHistoryScreen()),
+                  );
+                }),
 
                 const SizedBox(height: 16),
 
@@ -149,14 +142,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _locationOn, (val) {
                       setState(() => _locationOn = val);
                     }),
-
-                const SizedBox(height: 16),
-
-                // Support section
-                _sectionHeader('Support'),
-                _menuTile(Icons.help_outline, 'Help & FAQ'),
-                _menuTile(Icons.privacy_tip_outlined, 'Privacy Policy'),
-                _menuTile(Icons.info_outline, 'About FoodRush'),
 
                 const SizedBox(height: 16),
 
@@ -187,23 +172,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _statCard(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold)),
-          Text(label,
-              style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        ],
       ),
     );
   }
@@ -276,27 +244,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showEditProfileDialog(
-      BuildContext context, String currentName, String currentPhone) {
+  void _showEditProfileDialog(BuildContext context, String currentName,
+      String currentPhone, String currentAddress) {
     final nameController = TextEditingController(text: currentName);
     final phoneController = TextEditingController(text: currentPhone);
+    final addressController = TextEditingController(text: currentAddress);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Edit Profile'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              decoration: const InputDecoration(labelText: 'Full Name'),
-              controller: nameController,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Phone Number'),
-              controller: phoneController,
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: 'Full Name'),
+                controller: nameController,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Phone Number'),
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Delivery Address',
+                  hintText: 'House #, Street, Area, City',
+                  alignLabelWithHint: true,
+                ),
+                controller: addressController,
+                maxLines: 2,
+                textCapitalization: TextCapitalization.sentences,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -307,6 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await FirestoreService.instance.updateUserProfile({
                 'name': nameController.text.trim(),
                 'phoneNumber': phoneController.text.trim(),
+                'address': addressController.text.trim(),
               });
               if (!context.mounted) return;
               Navigator.pop(context);
