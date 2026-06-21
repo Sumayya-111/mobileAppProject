@@ -942,7 +942,7 @@ class _ActivityCard extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// RESTAURANTS TAB  ── with Firebase Backend
+// RESTAURANTS TAB  ── with Firebase Backend + EDIT FEATURE
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _RestaurantsTab extends StatefulWidget {
@@ -954,6 +954,46 @@ class _RestaurantsTab extends StatefulWidget {
 
 class _RestaurantsTabState extends State<_RestaurantsTab> {
   String _search = '';
+
+  void _editRestaurant(Map<String, dynamic> r, String docId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditRestaurantSheet(
+        restaurantData: r,
+        docId: docId,
+        onSave: (updatedData) async {
+          try {
+            await FirebaseFirestore.instance
+                .collection('restaurants')
+                .doc(docId)
+                .update(updatedData);
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('${updatedData['name']} updated!'),
+                backgroundColor: kGreen,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Error updating restaurant: $e'),
+                backgroundColor: kRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+            }
+          }
+        },
+      ),
+    );
+  }
 
   void _deleteRestaurant(Map<String, dynamic> r, String docId) {
     showDialog(
@@ -1124,6 +1164,7 @@ class _RestaurantsTabState extends State<_RestaurantsTab> {
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _RestaurantCard(
                                 r: r,
+                                onEdit: () => _editRestaurant(r, doc.id),
                                 onDelete: () => _deleteRestaurant(r, doc.id),
                               ),
                             );
@@ -1882,8 +1923,14 @@ class _MiniStatCard extends StatelessWidget {
 
 class _RestaurantCard extends StatelessWidget {
   final Map<String, dynamic> r;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  const _RestaurantCard({required this.r, this.onDelete});
+  
+  const _RestaurantCard({
+    required this.r,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1957,19 +2004,40 @@ class _RestaurantCard extends StatelessWidget {
                           color: kPrimary,
                           fontWeight: FontWeight.w700)),
                 ),
-                if (onDelete != null) ...[
+                if (onEdit != null || onDelete != null) ...[
                   const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: onDelete,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: kRed.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.delete_outline_rounded,
-                          color: kRed, size: 16),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onEdit != null)
+                        GestureDetector(
+                          onTap: onEdit,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: kBlue.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.edit_outlined,
+                                color: kBlue, size: 16),
+                          ),
+                        ),
+                      if (onEdit != null && onDelete != null)
+                        const SizedBox(width: 6),
+                      if (onDelete != null)
+                        GestureDetector(
+                          onTap: onDelete,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: kRed.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.delete_outline_rounded,
+                                color: kRed, size: 16),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],
@@ -2079,8 +2147,6 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
     super.dispose();
   }
 
-  /// Generates a simple random temp password for the restaurant owner's
-  /// first login. Admin shares this + the email manually.
   String _generateTempPassword() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
     final rand = DateTime.now().millisecondsSinceEpoch;
@@ -2268,6 +2334,232 @@ class _AddRestaurantSheetState extends State<_AddRestaurantSheet> {
                               borderRadius: BorderRadius.circular(14)),
                         ),
                         child: Text('Add Restaurant',
+                            style: _h3.copyWith(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EDIT RESTAURANT SHEET  ── NEW FEATURE
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _EditRestaurantSheet extends StatefulWidget {
+  final Map<String, dynamic> restaurantData;
+  final String docId;
+  final Function(Map<String, dynamic>) onSave;
+
+  const _EditRestaurantSheet({
+    required this.restaurantData,
+    required this.docId,
+    required this.onSave,
+  });
+
+  @override
+  State<_EditRestaurantSheet> createState() => _EditRestaurantSheetState();
+}
+
+class _EditRestaurantSheetState extends State<_EditRestaurantSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _descController;
+  late TextEditingController _imageController;
+  late TextEditingController _categoryController;
+  late TextEditingController _ratingController;
+  late TextEditingController _deliveryTimeController;
+  late TextEditingController _deliveryFeeController;
+  late TextEditingController _priceRangeController;
+  late TextEditingController _freeAboveController;
+
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.restaurantData;
+    _nameController = TextEditingController(text: data['name'] ?? '');
+    _descController = TextEditingController(text: data['description'] ?? '');
+    _imageController = TextEditingController(text: data['image'] ?? '');
+    _categoryController = TextEditingController(text: data['category'] ?? '');
+    _ratingController = TextEditingController(text: (data['rating'] ?? 4.0).toString());
+    _deliveryTimeController = TextEditingController(text: data['deliveryTime'] ?? '');
+    _deliveryFeeController = TextEditingController(text: data['deliveryFee'] ?? '');
+    _priceRangeController = TextEditingController(text: data['priceRange'] ?? '');
+    _freeAboveController = TextEditingController(text: data['freeAbove'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descController.dispose();
+    _imageController.dispose();
+    _categoryController.dispose();
+    _ratingController.dispose();
+    _deliveryTimeController.dispose();
+    _deliveryFeeController.dispose();
+    _priceRangeController.dispose();
+    _freeAboveController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      final updatedData = {
+        'name': _nameController.text.trim(),
+        'description': _descController.text.trim(),
+        'image': _imageController.text.trim(),
+        'category': _categoryController.text.trim(),
+        'rating': double.tryParse(_ratingController.text.trim()) ?? 4.0,
+        'deliveryTime': _deliveryTimeController.text.trim(),
+        'deliveryFee': _deliveryFeeController.text.trim(),
+        'priceRange': _priceRangeController.text.trim(),
+        'freeAbove': _freeAboveController.text.trim(),
+      };
+      widget.onSave(updatedData);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.92,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: kBorder, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Edit Restaurant', style: _h2),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                          color: kBg,
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.close_rounded,
+                          size: 18, color: kTextSub),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+                margin: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+                height: 1,
+                color: kBorder),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  children: [
+                    _FormField(
+                        controller: _nameController,
+                        label: 'Restaurant Name',
+                        hint: 'e.g. Pizza Palace',
+                        icon: Icons.storefront_rounded,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Name is required' : null),
+                    _FormField(
+                        controller: _descController,
+                        label: 'Description',
+                        hint: 'e.g. Best pizza in town',
+                        icon: Icons.notes_rounded,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Description is required' : null),
+                    _FormField(
+                        controller: _imageController,
+                        label: 'Image URL',
+                        hint: 'https://...',
+                        icon: Icons.image_outlined,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Image URL is required' : null),
+                    _FormField(
+                        controller: _categoryController,
+                        label: 'Category',
+                        hint: 'e.g. Pizza, Burger, Sushi',
+                        icon: Icons.category_outlined,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Category is required' : null),
+                    _FormField(
+                      controller: _ratingController,
+                      label: 'Rating',
+                      hint: 'e.g. 4.5',
+                      icon: Icons.star_outline_rounded,
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        final d = double.tryParse(v ?? '');
+                        if (d == null || d < 1 || d > 5) {
+                          return 'Enter a rating between 1.0 and 5.0';
+                        }
+                        return null;
+                      },
+                    ),
+                    _FormField(
+                        controller: _deliveryTimeController,
+                        label: 'Delivery Time',
+                        hint: 'e.g. 20-30 min',
+                        icon: Icons.access_time_rounded,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Delivery time is required' : null),
+                    _FormField(
+                        controller: _deliveryFeeController,
+                        label: 'Delivery Fee',
+                        hint: 'e.g. Rs. 200 or Free',
+                        icon: Icons.delivery_dining_rounded,
+                        validator: (v) =>
+                        v!.isEmpty ? 'Delivery fee is required' : null),
+                    _FormField(
+                        controller: _priceRangeController,
+                        label: 'Price Range',
+                        hint: 'e.g. Rs. or Rs.10–Rs.30',
+                        icon: Icons.payments_outlined),
+                    _FormField(
+                        controller: _freeAboveController,
+                        label: 'Free Delivery Above (optional)',
+                        hint: 'e.g. Rs. 20',
+                        icon: Icons.local_offer_outlined),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kPrimary,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Text('Save Changes',
                             style: _h3.copyWith(
                                 color: Colors.white,
                                 fontSize: 15,
