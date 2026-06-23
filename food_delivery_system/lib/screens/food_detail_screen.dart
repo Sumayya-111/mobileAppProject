@@ -46,7 +46,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   height: 300,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Color(item['color']).withOpacity(0.15),
+                    color: Color((item['color'] ?? 0xFFFF6B35) as int).withOpacity(0.15),
                   ),
                   child: Stack(
                     children: [
@@ -58,7 +58,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         errorBuilder: (_, __, ___) => Center(
                           child: Icon(Icons.fastfood,
                               size: 100,
-                              color: Color(item['color']).withOpacity(0.5)),
+                            color: Color((item['color'] ?? 0xFFFF6B35) as int).withOpacity(0.15)),
                         ),
                       ),
                       SafeArea(
@@ -143,12 +143,12 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
-                          color: Color(item['color']).withOpacity(0.1),
+                          color: Color((item['color'] ?? 0xFFFF6B35) as int).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(item['category'],
                             style: TextStyle(
-                                color: Color(item['color']),
+                                color: Color((item['color'] ?? 0xFFFF6B35) as int),
                                 fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: 16),
