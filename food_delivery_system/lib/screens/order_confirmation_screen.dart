@@ -7,16 +7,28 @@ import '../data/firestore_service.dart';
 class OrderConfirmationScreen extends StatefulWidget {
   final double total;
   final List<Map<String, dynamic>> cartItems;
+  final String customerName;
+  final String customerPhone;
+  final String address;
+  final String deliveryInstructions;
+  final String paymentMethod;
+
   const OrderConfirmationScreen({
     super.key,
     required this.total,
     required this.cartItems,
+    required this.customerName,
+    required this.customerPhone,
+    required this.address,
+    required this.deliveryInstructions,
+    required this.paymentMethod,
   });
 
   @override
   State<OrderConfirmationScreen> createState() =>
       _OrderConfirmationScreenState();
 }
+
 
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
     with SingleTickerProviderStateMixin {
@@ -64,8 +76,6 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
         return;
       }
 
-      // All cart items belong to the same restaurant (single-restaurant
-      // checkout), so restaurant info is read from the first item.
       final firstItem = widget.cartItems.first;
       final restaurantId = firstItem['restaurantId'];
 
@@ -76,27 +86,21 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
         orElse: () => <String, dynamic>{},
       );
 
-      final userProfile =
-      await FirestoreService.instance.fetchCurrentUserProfile();
-
       final itemStrings = widget.cartItems
-          .map((i) =>
-      '${i['name']} x${i['quantity']}')
+          .map((i) => '${i['name']} x${i['quantity']}')
           .toList();
 
       final orderId = await FirestoreService.instance.createOrder(
-        customerName: (userProfile?['name'] ??
-            userProfile?['displayName'] ??
-            'Customer') as String,
-        customerPhone:
-        (userProfile?['phoneNumber'] ?? userProfile?['phone'] ?? '')
-        as String,
+        customerName: widget.customerName,
+        customerPhone: widget.customerPhone,
         restaurantId: restaurantId,
         restaurantName: (restaurant['name'] ?? '') as String,
         restaurantImage: (restaurant['image'] ?? '') as String,
         items: itemStrings,
         total: widget.total,
-        address: (userProfile?['address'] ?? 'Karachi, Pakistan') as String,
+        address: widget.address,
+        deliveryInstructions: widget.deliveryInstructions,
+        paymentMethod: widget.paymentMethod,
       );
 
       if (mounted) {
@@ -320,32 +324,32 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
                               fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const OrderTrackScreen(),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side:
-                        const BorderSide(color: Color(0xFFFF6B35)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: const Text('Track Order',
-                          style: TextStyle(
-                              color: Color(0xFFFF6B35),
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                  ),
+                  // const SizedBox(height: 12),
+                  // SizedBox(
+                  //   width: double.infinity,
+                  //   height: 56,
+                  //   child: OutlinedButton(
+                  //     onPressed: () {
+                  //       Navigator.push(
+                  //         context,
+                  //         MaterialPageRoute(
+                  //           builder: (_) => const OrderTrackScreen(),
+                  //         ),
+                  //       );
+                  //     },
+                  //     style: OutlinedButton.styleFrom(
+                  //       side:
+                  //       const BorderSide(color: Color(0xFFFF6B35)),
+                  //       shape: RoundedRectangleBorder(
+                  //           borderRadius: BorderRadius.circular(14)),
+                  //     ),
+                  //     child: const Text('Track Order',
+                  //         style: TextStyle(
+                  //             color: Color(0xFFFF6B35),
+                  //             fontSize: 16,
+                  //             fontWeight: FontWeight.bold)),
+                  //   ),
+                  // ),
                   const SizedBox(height: 12),
                 ],
               ),

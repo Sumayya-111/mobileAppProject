@@ -1,7 +1,7 @@
 // lib/screens/cart_screen.dart
 import 'package:flutter/material.dart';
 import 'package:food_delivery_system/data/cart_manager.dart';
-import 'order_confirmation_screen.dart';
+import 'checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -339,7 +339,7 @@ class _CartScreenState extends State<CartScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => OrderConfirmationScreen(
+                    builder: (_) => CheckoutScreen(
                         total: _cart.total, cartItems: _cart.items),
                   ),
                 );

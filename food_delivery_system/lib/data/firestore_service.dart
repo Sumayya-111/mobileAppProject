@@ -153,8 +153,10 @@ class FirestoreService {
     required List<String> items,
     required double total,
     required String address,
+    String deliveryInstructions = '',
+    String paymentMethod = 'Cash on Delivery',
   }) async {
-    final docRef = _orders.doc(); // pre-generate id so we can store it
+    final docRef = _orders.doc();
     final orderId = 'ORD-${docRef.id.substring(0, 6).toUpperCase()}';
 
     await docRef.set({
@@ -169,6 +171,8 @@ class FirestoreService {
       'status': 'Pending',
       'time': 'Just now',
       'address': address,
+      'deliveryInstructions': deliveryInstructions,
+      'paymentMethod': paymentMethod,
       'userId': FirebaseAuth.instance.currentUser?.uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
