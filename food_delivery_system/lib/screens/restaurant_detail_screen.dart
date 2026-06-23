@@ -18,15 +18,12 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
   late TabController _tabController;
   final List<String> _tabs = ['All', 'Popular', 'Pizza', 'Burger', 'Sushi'];
 
-  // ── CartManager singleton ──────────────────────────────────────────────────
   final CartManager _cart = CartManager.instance;
 
-  // ── Menu items for this restaurant — live from Firestore ────────────────
   late final Stream<List<Map<String, dynamic>>> _menuItemsStream =
   FirestoreService.instance
       .menuItemsForRestaurantStream(widget.restaurant['id']);
 
-  // ── Add to cart ────────────────────────────────────────────────────────────
   void _addToCart(Map<String, dynamic> item) {
     _cart.addItem({
       'id':                   item['id'],
@@ -38,7 +35,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
       'restaurantDeliveryFee': widget.restaurant['deliveryFee'] ?? '',
     });
 
-    // Rebuild so cart badge updates instantly
     setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -95,7 +91,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
               ),
             ),
             actions: [
-              // ── Cart icon with live badge ────────────────────────────────
+              // Cart icon with live badge
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -148,7 +144,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
                           size: 80, color: Colors.white),
                     ),
                   ),
-                  // Subtle dark gradient so app bar icons stay readable
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -168,7 +163,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
         ],
         body: Column(
           children: [
-            // ── Restaurant info card ─────────────────────────────────────────
+            // Restaurant info card
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -231,7 +226,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
               ),
             ),
 
-            // ── Tab bar ──────────────────────────────────────────────────────
             Container(
               color: Colors.white,
               child: TabBar(
@@ -244,7 +238,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
               ),
             ),
 
-            // ── Menu items ───────────────────────────────────────────────────
+            // Menu items
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _menuItemsStream,
@@ -288,7 +282,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
                           ),
                           child: Row(
                             children: [
-                              // ── Food image ───────────────────────────────
+                              //  Food image
                               ClipRRect(
                                 borderRadius: const BorderRadius.only(
                                   topLeft: Radius.circular(16),
@@ -312,7 +306,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
                                   ),
                                 ),
                               ),
-                              // ── Info ─────────────────────────────────────
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -367,7 +360,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
                                                 fontSize: 16,
                                                 color: Color(0xFFFF6B35)),
                                           ),
-                                          // ── Add / qty control ──────────
                                           qtyInCart == 0
                                               ? GestureDetector(
                                             onTap: () =>
@@ -444,9 +436,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Inline +/- quantity control shown once an item is in the cart
-// ─────────────────────────────────────────────────────────────────────────────
 class _InlineQtyControl extends StatelessWidget {
   final int quantity;
   final VoidCallback onAdd;
